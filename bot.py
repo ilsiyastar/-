@@ -22,23 +22,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await update.message.reply_text(
         "Привет! Я твой личный ассистент.\n\n"
-        "Отмечай привычки голосом или текстом: 'сделала медитацию, прошла 8к шагов'\n\n"
+        "Отмечай привычки голосом или текстом:\n"
+        "'сделала медитацию, прошла 8к шагов'\n\n"
         "Команды:\n"
-        "/итог — итог недели\n"
-        "/стрик — текущий стрик\n"
-        "/задача — задача по продажам\n"
-        "/история — последние 5 заданий"
+        "/summary — итог недели\n"
+        "/streak — текущий стрик\n"
+        "/task — задача по продажам\n"
+        "/history — последние 5 заданий"
     )
 
 
-async def итог(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != OWNER_CHAT_ID:
         return
-    summary = get_week_summary()
-    await update.message.reply_text(summary)
+    text = get_week_summary()
+    await update.message.reply_text(text)
 
 
-async def стрик(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def streak(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != OWNER_CHAT_ID:
         return
     current = get_current_streak()
@@ -46,25 +47,25 @@ async def стрик(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🔥 Текущий стрик: {current} дней\n🏆 Лучший стрик: {best} дней")
 
 
-async def задача(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != OWNER_CHAT_ID:
         return
-    await _send_sales_task(update, context)
+    await _send_sales_task(update)
 
 
-async def _send_sales_task(update, context):
-    task = generate_sales_task()
+async def _send_sales_task(update):
+    t = generate_sales_task()
     user_state["waiting_for_sales_answer"] = True
-    user_state["current_task"] = task
-    await update.message.reply_text(task)
+    user_state["current_task"] = t
+    await update.message.reply_text(t)
 
 
-async def история(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != OWNER_CHAT_ID:
         return
     from sheets import get_sales_history
-    history = get_sales_history()
-    await update.message.reply_text(history)
+    text = get_sales_history()
+    await update.message.reply_text(text)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -72,7 +73,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     async with _lock:
-        # Обрабатываем голос
         if update.message.voice:
             await update.message.reply_text("🎙 Слушаю...")
             text = await transcribe_voice(update.message.voice, context)
@@ -83,27 +83,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = update.message.text
 
         if user_state["waiting_for_sales_answer"]:
-            # Это ответ на задачу по продажам
-            task = user_state["current_task"]
-            review = process_sales_review(task, text)
+            t = user_state["current_task"]
+            review = process_sales_review(t, text)
             score = _extract_score(review)
-            save_sales(task, text, review, score)
+            save_sales(t, text, review, score)
             user_state["waiting_for_sales_answer"] = False
             user_state["current_task"] = None
             await update.message.reply_text(review)
         else:
-            # Это отчёт о привычках
             result = process_habits(text)
             if result is None:
                 await update.message.reply_text("Не понял, попробуй написать иначе 🙏")
                 return
-
             streak_data = save_habits(result)
             response = _format_habits_response(result, streak_data)
             await update.message.reply_text(response)
 
 
-def _extract_score(review_text: str) -> int | None:
+def _extract_score(review_text: str):
     import re
     match = re.search(r'Оценка:\s*([1-5])/5', review_text)
     if match:
@@ -119,14 +116,12 @@ def _format_habits_response(habits: dict, streak_data: dict) -> str:
     lines.append(f"🇬🇧 Английский — {'да' if habits.get('английский') else 'нет'}")
     lines.append(f"📚 Чтение — {'да' if habits.get('чтение') else 'нет'}")
     lines.append("")
-
     current = streak_data.get("current", 0)
     best = streak_data.get("best", 0)
     if streak_data.get("broken"):
         lines.append(f"💔 Стрик сброшен. Лучший был: {best} дней")
     else:
         lines.append(f"🔥 Стрик: {current} дней")
-
     return "\n".join(lines)
 
 
@@ -134,10 +129,10 @@ def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("итог", итог))
-    app.add_handler(CommandHandler("стрик", стрик))
-    app.add_handler(CommandHandler("задача", задача))
-    app.add_handler(CommandHandler("история", история))
+    app.add_handler(CommandHandler("summary", summary))
+    app.add_handler(CommandHandler("streak", streak))
+    app.add_handler(CommandHandler("task", task))
+    app.add_handler(CommandHandler("history", history))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.VOICE, handle_message))
 
