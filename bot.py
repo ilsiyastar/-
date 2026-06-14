@@ -109,12 +109,29 @@ def _extract_score(review_text: str):
 
 
 def _format_habits_response(habits: dict, streak_data: dict) -> str:
-    lines = ["✅ Зафиксировано:"]
-    lines.append(f"🚶 Шаги — {'да' if habits.get('шаги') else 'нет'}")
-    lines.append(f"🧘 Медитация — {'да' if habits.get('медитация') else 'нет'}")
-    lines.append(f"🕉 Йога — {'да' if habits.get('йога') else 'нет'}")
-    lines.append(f"🇬🇧 Английский — {'да' if habits.get('английский') else 'нет'}")
-    lines.append(f"📚 Чтение — {'да' if habits.get('чтение') else 'нет'}")
+    merged = streak_data.get("merged", habits)
+    newly_added = streak_data.get("newly_added")
+    done = streak_data.get("done", 0)
+
+    # Если это обновление за сегодня — показываем что добавилось
+    if newly_added is not None:
+        if newly_added:
+            names = {"шаги": "🚶 Шаги", "медитация": "🧘 Медитация", "йога": "🕉 Йога",
+                     "английский": "🇬🇧 Английский", "чтение": "📚 Чтение"}
+            added_str = ", ".join(names[k] for k in newly_added)
+            lines = [f"✅ Добавила: {added_str}"]
+        else:
+            lines = ["✅ Уже всё отмечено раньше"]
+    else:
+        lines = ["✅ Зафиксировано:"]
+
+    lines.append("")
+    lines.append(f"🚶 Шаги — {'да' if merged.get('шаги') else 'нет'}")
+    lines.append(f"🧘 Медитация — {'да' if merged.get('медитация') else 'нет'}")
+    lines.append(f"🕉 Йога — {'да' if merged.get('йога') else 'нет'}")
+    lines.append(f"🇬🇧 Английский — {'да' if merged.get('английский') else 'нет'}")
+    lines.append(f"📚 Чтение — {'да' if merged.get('чтение') else 'нет'}")
+    lines.append(f"\nВсего сегодня: {done}/5")
     lines.append("")
     current = streak_data.get("current", 0)
     best = streak_data.get("best", 0)

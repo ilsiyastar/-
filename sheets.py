@@ -30,12 +30,24 @@ def save_habits(habits_dict: dict) -> dict:
         habits = data["habits"]
 
         keys = ["шаги", "медитация", "йога", "английский", "чтение"]
-        done = sum(1 for k in keys if habits_dict.get(k))
-        day_ok = done >= 3
 
-        # Если сегодня уже есть запись — обновляем
+        # Если за сегодня уже есть запись — объединяем (OR)
+        # Если сделала утром медитацию, вечером шаги — засчитаны оба
+        existing_today = None
         if habits and habits[-1]["дата"] == today:
-            habits.pop()
+            existing_today = habits.pop()
+
+        if existing_today:
+            # Объединяем: если хоть раз True — True
+            merged = {k: existing_today.get(k, False) or habits_dict.get(k, False) for k in keys}
+            # Сообщаем что добавили новое
+            newly_added = [k for k in keys if not existing_today.get(k, False) and habits_dict.get(k, False)]
+        else:
+            merged = {k: habits_dict.get(k, False) for k in keys}
+            newly_added = None
+
+        done = sum(1 for k in keys if merged[k])
+        day_ok = done >= 3
 
         # Пересчёт стрика
         current_streak = 0
@@ -68,11 +80,11 @@ def save_habits(habits_dict: dict) -> dict:
 
         habits.append({
             "дата": today,
-            "шаги": habits_dict.get("шаги", False),
-            "медитация": habits_dict.get("медитация", False),
-            "йога": habits_dict.get("йога", False),
-            "английский": habits_dict.get("английский", False),
-            "чтение": habits_dict.get("чтение", False),
+            "шаги": merged.get("шаги", False),
+            "медитация": merged.get("медитация", False),
+            "йога": merged.get("йога", False),
+            "английский": merged.get("английский", False),
+            "чтение": merged.get("чтение", False),
             "выполнено_из_5": done,
             "день_засчитан": day_ok,
             "стрик_текущий": current_streak,
@@ -80,11 +92,18 @@ def save_habits(habits_dict: dict) -> dict:
         })
 
         _save(data)
-        return {"current": current_streak, "best": best_streak, "broken": broken}
+        return {
+            "current": current_streak,
+            "best": best_streak,
+            "broken": broken,
+            "merged": merged,
+            "newly_added": newly_added,
+            "done": done,
+        }
 
     except Exception as e:
         logger.error(f"Ошибка сохранения привычек: {e}")
-        return {"current": 0, "best": 0, "broken": False}
+        return {"current": 0, "best": 0, "broken": False, "merged": {}, "newly_added": None, "done": 0}
 
 
 def get_current_streak() -> int:
@@ -109,6 +128,14 @@ def has_habits_today() -> bool:
     if habits:
         return habits[-1]["дата"] == date.today().isoformat()
     return False
+
+
+def get_today_habits() -> dict:
+    data = _load()
+    habits = data.get("habits", [])
+    if habits and habits[-1]["дата"] == date.today().isoformat():
+        return habits[-1]
+    return {}
 
 
 def get_week_summary() -> str:
